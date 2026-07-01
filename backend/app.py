@@ -245,6 +245,7 @@ def health():
 
 
 if __name__ == "__main__":
-    print("GridTwin AI backend pokrenut na http://localhost:5000")
+    port = int(os.environ.get("PORT", 5000))
+    print(f"GridTwin AI backend pokrenut na http://0.0.0.0:{port}")
     print(f"Kontekst učitan: {len(CONTEXT)} karaktera")
-    app.run(debug=False, port=5000)
+    app.run(debug=False, host="0.0.0.0", port=port)
