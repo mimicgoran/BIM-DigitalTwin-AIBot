@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GridTwin — Vračar Digital Twin</title>
+  <link href="https://api.maptiler.com/maps/streets-v2/style.json?key=IcITGmBpd5JPy3r61gfQ" rel="preload" as="fetch" crossorigin />
+  <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    /* ── Reset & tokens ───────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --accent:    #58a6ff;
+      --accent2:   #3fb950;
+      --warn:      #d29922;
+      --danger:    #f85149;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --radius:    8px;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+      --font-ui:   'Inter', 'Segoe UI', system-ui, sans-serif;
+    }
+
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+
+    /* ── Layout ───────────────────────────────────────────────── */
+    #app { display: flex; height: 100vh; }
+    #map  { flex: 1; }
+
+    /* ── Sidebar ──────────────────────────────────────────────── */
+    #sidebar {
+      width: 360px;
+      min-width: 360px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 10;
+    }
+
+    #sidebar-header {
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+
+    #sidebar-header .header-text h1 {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      color: var(--accent);
+      font-family: var(--font-mono);
+    }
+
+    #sidebar-header .header-text p {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    #lang-toggle {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: var(--font-mono);
+      letter-spacing: .06em;
+      transition: border-color .15s, color .15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-left: 10px;
+    }
+
+    #lang-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Info panel ───────────────────────────────────────────── */
+    #info-panel {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      overflow-y: auto;
+      min-height: 60px;
+      flex-shrink: 0;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    #info-panel .hint {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    #info-panel .obj-type {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    #info-panel h2 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .info-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+    }
+
+    .info-card .label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 2px;
+    }
+
+    .info-card .value {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+    }
+
+    .info-card .value.green  { color: var(--accent2); }
+    .info-card .value.yellow { color: var(--warn); }
+    .info-card .value.orange { color: #e0873a; }
+    .info-card .value.red    { color: var(--danger); }
+    .info-card .value.blue   { color: var(--accent); }
+
+    .sim-note {
+      margin-top: 8px;
+      font-size: 10px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Legend ───────────────────────────────────────────────── */
+    #legend {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #legend h3 {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .legend-items { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ── Resizer ──────────────────────────────────────────────── */
+    #resizer {
+      height: 6px;
+      background: var(--border);
+      cursor: ns-resize;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .15s;
+      position: relative;
+    }
+
+    #resizer:hover, #resizer.dragging { background: var(--accent); }
+
+    #resizer::after {
+      content: '';
+      width: 32px;
+      height: 2px;
+      border-radius: 2px;
+      background: var(--muted);
+      opacity: 0.5;
+    }
+
+    #resizer:hover::after { background: var(--bg); opacity: 1; }
+
+    /* ── Chat area flex ───────────────────────────────────────── */
+    #chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #chat-header {
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #chat-header::before {
+      content: '';
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent2);
+      display: inline-block;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .msg {
+      max-width: 100%;
+      font-size: 13px;
+      line-height: 1.55;
+      border-radius: var(--radius);
+      padding: 9px 12px;
+    }
+
+    .msg.user {
+      background: #1c2d3f;
+      border: 1px solid #1f4068;
+      align-self: flex-end;
+      color: var(--text);
+      max-width: 85%;
+    }
+
+    .msg.ai {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      align-self: flex-start;
+      color: var(--text);
+    }
+
+    .msg.ai .fly-link {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: underline;
+      background: none;
+      border: none;
+      padding: 0;
+      font-family: var(--font-ui);
+    }
+
+    .msg.loading { color: var(--muted); font-style: italic; }
+
+    #chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 12px 20px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    #chat-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      font-size: 13px;
+      color: var(--text);
+      font-family: var(--font-ui);
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    #chat-input:focus { border-color: var(--accent); }
+    #chat-input::placeholder { color: var(--muted); }
+
+    #send-btn {
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius);
+      padding: 8px 14px;
+      color: #0d1117;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s;
+      white-space: nowrap;
+    }
+
+    #send-btn:hover { opacity: .85; }
+    #send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Suggestions ──────────────────────────────────────────── */
+    #suggestions {
+      padding: 0 20px 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .sug-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 11px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+      font-family: var(--font-ui);
+    }
+
+    .sug-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── MapLibre popup override ──────────────────────────────── */
+    .maplibregl-popup-content {
+      background: var(--surface) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius) !important;
+      padding: 0 !important;
+      color: var(--text) !important;
+      font-family: var(--font-ui) !important;
+      min-width: 220px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.5) !important;
+    }
+
+    .maplibregl-popup-tip { display: none !important; }
+    .maplibregl-popup-close-button { color: var(--muted) !important; font-size: 16px !important; padding: 6px 10px !important; }
+
+    .popup-inner { padding: 14px 16px; }
+    .popup-type { font-size: 10px; font-family: var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+    .popup-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+    .popup-row { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--border); }
+    .popup-row:last-child { border-bottom: none; }
+    .popup-row .k { color: var(--muted); }
+    .popup-row .v { font-family: var(--font-mono); font-weight: 600; }
+    .popup-note { font-size: 10px; color: var(--muted); margin-top: 8px; font-style: italic; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <div class="header-text">
+        <h1>GRIDTWIN // VRAČAR</h1>
+        <p>Digital Twin · BIM · AI · OSM + GHSL + Open-Meteo</p>
+      </div>
+      <button id="lang-toggle" onclick="toggleLang()" title="Switch language">SR</button>
+    </div>
+
+    <div id="info-panel" style="display:none;"></div>
+
+    <div id="resizer" title="Vuci da promeniš veličinu"></div>
+
+    <div id="legend">
+      <h3 data-i18n="legend_title">Energetska potrošnja (simulirano)</h3>
+      <div class="legend-items">
+        <div class="legend-item"><div class="legend-dot" style="background:#2ecc71"></div>&lt; 80</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f1c40f"></div>80–150</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#e67e22"></div>150–200</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#e74c3c"></div>&gt; 200 kWh/m²/<span data-i18n="year">god</span></div>
+      </div>
+    </div>
+
+    <div id="chat-area">
+      <div id="chat-header" data-i18n="ai_assistant">AI asistent</div>
+      <div id="messages">
+        <div class="msg ai" data-i18n="welcome_msg">Zdravo! Pitaj me o zgradama, parkovima i energetici Vračara.</div>
+      </div>
+      <div id="chat-input-row">
+        <input id="chat-input" type="text" data-i18n-placeholder="placeholder" placeholder="Pitaj o Vračaru..." />
+        <button id="send-btn" onclick="sendMessage()" data-i18n="send">Pošalji</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Globalni state ─────────────────────────────────────────────
+let buildingsData = null;
+let parksData     = null;
+let streetsData   = null;
+let map           = null;
+let contextSummary = '';
+let currentLang   = 'sr';
+
+// ── i18n rečnik ───────────────────────────────────────────────
+const i18n = {
+  sr: {
+    legend_title: 'Energetska potrošnja (simulirano)',
+    year: 'god',
+    ai_assistant: 'AI asistent',
+    welcome_msg: 'Zdravo! Pitaj me o zgradama, parkovima i energetici Vračara.',
+    placeholder: 'Pitaj o Vračaru...',
+    send: 'Pošalji',
+    building: 'Zgrada',
+    park: 'Park',
+    street: 'Ulica',
+    floors: 'Spratovi',
+    height: 'Visina',
+    base_area: 'Osnova',
+    gross_area: 'Bruto površina',
+    consumption_m2: 'Potrošnja/m²',
+    annual_total: 'Godišnje ukupno',
+    per_floor: 'Po spratu',
+    build_epoch: 'Epoha izgradnje',
+    sim_note: '⚠ Energetska potrošnja je simulirana (EU standardi). Nije stvarno izmerena.',
+    weather_note: '🌤 Meteorološki podaci: Open-Meteo API (stvarni, trenutni)',
+    area: 'Površina',
+    temperature: 'Temperatura',
+    humidity: 'Vlažnost',
+    uv: 'UV indeks',
+    wind: 'Vetar',
+    rain: 'Padavine',
+    street_type: 'Tip',
+    max_speed: 'Maks. brzina',
+    oneway: 'Jednosmerna',
+    yes: 'Da',
+    no: 'Ne',
+    loading_weather: 'Učitavam...',
+    lang_label: 'EN',
+    resizer_title: 'Vuci da promeniš veličinu',
+    error_load: 'Greška pri učitavanju podataka.<br>Pokreni index.html kroz lokalni server.',
+    error_api: 'Greška: ',
+    thinking: 'Razmišljam...',
+    show_on_map: '📍 Prikaži na mapi',
+    epoch_pre1941: 'Pre 1975 (GHSL)',
+    epoch_1960: '1975–1980 (GHSL)',
+    epoch_1980: '1980–1990 (GHSL)',
+    epoch_post2000: 'Posle 1990 (GHSL)',
+  },
+  en: {
+    legend_title: 'Energy consumption (simulated)',
+    year: 'yr',
+    ai_assistant: 'AI Assistant',
+    welcome_msg: 'Hello! Ask me about buildings, parks and energy in Vračar.',
+    placeholder: 'Ask about Vračar...',
+    send: 'Send',
+    building: 'Building',
+    park: 'Park',
+    street: 'Street',
+    floors: 'Floors',
+    height: 'Height',
+    base_area: 'Footprint',
+    gross_area: 'Gross area',
+    consumption_m2: 'Consumption/m²',
+    annual_total: 'Annual total',
+    per_floor: 'Per floor',
+    build_epoch: 'Build epoch',
+    sim_note: '⚠ Energy consumption is simulated (EU standards). Not measured.',
+    weather_note: '🌤 Weather data: Open-Meteo API (real, live)',
+    area: 'Area',
+    temperature: 'Temperature',
+    humidity: 'Humidity',
+    uv: 'UV index',
+    wind: 'Wind',
+    rain: 'Precipitation',
+    street_type: 'Type',
+    max_speed: 'Max speed',
+    oneway: 'One-way',
+    yes: 'Yes',
+    no: 'No',
+    loading_weather: 'Loading...',
+    lang_label: 'SR',
+    resizer_title: 'Drag to resize',
+    error_load: 'Error loading data.<br>Run index.html through a local server.',
+    error_api: 'Error: ',
+    thinking: 'Thinking...',
+    show_on_map: '📍 Show on map',
+    epoch_pre1941: 'Before 1975 (GHSL)',
+    epoch_1960: '1975–1980 (GHSL)',
+    epoch_1980: '1980–1990 (GHSL)',
+    epoch_post2000: 'After 1990 (GHSL)',
+  }
+};
+
+function t(key) { return i18n[currentLang][key] || key; }
+
+function toggleLang() {
+  currentLang = currentLang === 'sr' ? 'en' : 'sr';
+  applyLang();
+}
+
+function applyLang() {
+  const d = i18n[currentLang];
+  document.getElementById('lang-toggle').textContent = d.lang_label;
+  document.getElementById('resizer').title = d.resizer_title;
+
+  // Statični elementi
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (d[key]) el.textContent = d[key];
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    const key = el.getAttribute('data-i18n-placeholder');
+    if (d[key]) el.placeholder = d[key];
+  });
+
+  // Legenda godina
+  document.querySelector('[data-i18n="year"]').textContent = d.year;
+}
+
+// ── Inicijalizacija mape ──────────────────────────────────────
+const map_ = new maplibregl.Map({
+  container: 'map',
+  style: `https://api.maptiler.com/maps/streets-v2/style.json?key=IcITGmBpd5JPy3r61gfQ`,
+  center: [20.472, 44.800],
+  zoom: 15,
+  pitch: 50,
+  bearing: -15,
+  antialias: true
+});
+map = map_;
+
+map.addControl(new maplibregl.NavigationControl(), 'top-left');
+
+// ── Učitaj podatke i dodaj slojeve ────────────────────────────
+map.on('load', async () => {
+  try {
+    const [bRes, pRes, sRes] = await Promise.all([
+      fetch('../data/buildings_processed.geojson'),
+      fetch('../data/parks_processed.geojson'),
+      fetch('../data/streets_processed.geojson')
+    ]);
+    buildingsData = await bRes.json();
+    parksData     = await pRes.json();
+    streetsData   = await sRes.json();
+
+    // Ukloni SVE fill-extrusion slojeve iz MapTiler stila (zgrade, senke itd.)
+    map.getStyle().layers
+      .filter(l => l.type === 'fill-extrusion')
+      .forEach(l => { if (map.getLayer(l.id)) map.removeLayer(l.id); });
+
+    addStreetLayer();
+    addParkLayer();
+    addBuildingLayer();
+    addClickHandler();
+    buildContextSummary();
+  } catch (e) {
+    console.error('Greška pri učitavanju GeoJSON:', e);
+    showInfo('<p style="color:var(--danger)">Greška pri učitavanju podataka.<br>Pokreni index.html kroz lokalni server (npr. <code>python -m http.server</code> u root folderu projekta).</p>');
+  }
+});
+
+// ── Ulice ────────────────────────────────────────────────────
+function addStreetLayer() {
+  map.addSource('streets', { type: 'geojson', data: streetsData });
+  map.addLayer({
+    id: 'streets-line',
+    type: 'line',
+    source: 'streets',
+    paint: {
+      'line-color': '#30363d',
+      'line-width': ['interpolate', ['linear'], ['zoom'], 13, 1, 17, 2.5]
+    }
+  });
+  map.on('mouseenter', 'streets-line', () => map.getCanvas().style.cursor = 'pointer');
+  map.on('mouseleave', 'streets-line', () => map.getCanvas().style.cursor = '');
+}
+
+// ── Parkovi ──────────────────────────────────────────────────
+function addParkLayer() {
+  map.addSource('parks', { type: 'geojson', data: parksData });
+  map.addLayer({
+    id: 'parks-fill',
+    type: 'fill',
+    source: 'parks',
+    paint: {
+      'fill-color': '#3fb950',
+      'fill-opacity': 0.25
+    }
+  });
+  map.addLayer({
+    id: 'parks-outline',
+    type: 'line',
+    source: 'parks',
+    paint: { 'line-color': '#3fb950', 'line-width': 1.2, 'line-opacity': 0.6 }
+  });
+  map.on('mouseenter', 'parks-fill', () => map.getCanvas().style.cursor = 'pointer');
+  map.on('mouseleave', 'parks-fill', () => map.getCanvas().style.cursor = '');
+}
+
+// ── Zgrade ───────────────────────────────────────────────────
+function addBuildingLayer() {
+  map.addSource('buildings', { type: 'geojson', data: buildingsData });
+  map.addLayer({
+    id: 'buildings-3d',
+    type: 'fill-extrusion',
+    source: 'buildings',
+    paint: {
+      'fill-extrusion-color': [
+        'interpolate', ['linear'], ['zoom'],
+        15, ['get', 'energy_color'],
+        17, '#d4c5a9'
+      ],
+      'fill-extrusion-height': ['get', 'height_m'],
+      'fill-extrusion-base': 0,
+      'fill-extrusion-opacity': 0.85
+    }
+  });
+  map.on('mouseenter', 'buildings-3d', () => map.getCanvas().style.cursor = 'pointer');
+  map.on('mouseleave', 'buildings-3d', () => map.getCanvas().style.cursor = '');
+}
+
+// ── Centralni klik handler — zgrada > park > ulica ────────────
+function addClickHandler() {
+  map.on('click', (e) => {
+    // Provjeri zgrade prve (najviši prioritet)
+    const buildings = map.queryRenderedFeatures(e.point, { layers: ['buildings-3d'] });
+    if (buildings.length > 0) {
+      onBuildingClick({ features: buildings, lngLat: e.lngLat });
+      return;
+    }
+
+    // Zatim parkovi
+    const parks = map.queryRenderedFeatures(e.point, { layers: ['parks-fill'] });
+    if (parks.length > 0) {
+      onParkClick({ features: parks, lngLat: e.lngLat });
+      return;
+    }
+
+    // Zatim ulice
+    const streets = map.queryRenderedFeatures(e.point, { layers: ['streets-line'] });
+    if (streets.length > 0) {
+      onStreetClick({ features: streets, lngLat: e.lngLat });
+      return;
+    }
+  });
+}
+
+// ── Klik handleri ─────────────────────────────────────────────
+function onBuildingClick(e) {
+  const p = e.features[0].properties;
+
+  const colorClass = {
+    '#2ecc71': 'green',
+    '#f1c40f': 'yellow',
+    '#e67e22': 'orange',
+    '#e74c3c': 'red'
+  }[p.energy_color] || 'blue';
+
+  const zoneLabels = {
+    'pre_1941':   t('epoch_pre1941'),
+    '1960_1980':  t('epoch_1960'),
+    '1980_2000':  t('epoch_1980'),
+    'posle_2000': t('epoch_post2000')
+  };
+
+  showInfo(`
+    <div class="obj-type">${t('building')}</div>
+    <h2>${p.address || (currentLang === 'sr' ? 'Nepoznata adresa' : 'Unknown address')}</h2>
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="label">${t('floors')}</div>
+        <div class="value blue">${p.levels}</div>
+      </div>
+      <div class="info-card">
+        <div class="label">${t('height')}</div>
+        <div class="value blue">${p.height_m?.toFixed(1)} m</div>
+      </div>
+      <div class="info-card">
+        <div class="label">${t('base_area')}</div>
+        <div class="value">${Math.round(p.base_area_m2).toLocaleString()} m²</div>
+      </div>
+      <div class="info-card">
+        <div class="label">${t('gross_area')}</div>
+        <div class="value">${Math.round(p.total_area_m2).toLocaleString()} m²</div>
+      </div>
+      <div class="info-card">
+        <div class="label">${t('consumption_m2')}</div>
+        <div class="value ${colorClass}">${p.kwh_per_m2} kWh</div>
+      </div>
+      <div class="info-card">
+        <div class="label">${t('annual_total')}</div>
+        <div class="value ${colorClass}">${Math.round(p.total_kwh_year).toLocaleString()} kWh</div>
+      </div>
+      <div class="info-card">
+        <div class="label">${t('per_floor')}</div>
+        <div class="value">${Math.round(p.kwh_per_floor).toLocaleString()} kWh</div>
+      </div>
+      <div class="info-card">
+        <div class="label">${t('build_epoch')}</div>
+        <div class="value">${zoneLabels[p.age_zone] || p.age_zone}</div>
+      </div>
+    </div>
+    <p class="sim-note">${t('sim_note')}</p>
+  `);
+}
+
+async function onParkClick(e) {
+  const p = e.features[0].properties;
+  const coords = e.lngLat;
+  const unknownPark = currentLang === 'sr' ? 'Nepoznat park' : 'Unknown park';
+
+  showInfo(`
+    <div class="obj-type">${t('park')}</div>
+    <h2>${p.name || unknownPark}</h2>
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="label">${t('area')}</div>
+        <div class="value green">${Math.round(p.area_m2).toLocaleString()} m²</div>
+      </div>
+      <div class="info-card">
+        <div class="label">${t('temperature')}</div>
+        <div class="value blue">${t('loading_weather')}</div>
+      </div>
+    </div>
+  `);
+
+  try {
+    const weather = await fetchWeather(coords.lat, coords.lng);
+    showInfo(`
+      <div class="obj-type">${t('park')}</div>
+      <h2>${p.name || unknownPark}</h2>
+      <div class="info-grid">
+        <div class="info-card">
+          <div class="label">${t('area')}</div>
+          <div class="value green">${Math.round(p.area_m2).toLocaleString()} m²</div>
+        </div>
+        <div class="info-card">
+          <div class="label">${t('temperature')}</div>
+          <div class="value blue">${weather.temperature_2m}°C</div>
+        </div>
+        <div class="info-card">
+          <div class="label">${t('humidity')}</div>
+          <div class="value">${weather.relative_humidity_2m}%</div>
+        </div>
+        <div class="info-card">
+          <div class="label">${t('uv')}</div>
+          <div class="value ${weather.uv_index > 6 ? 'red' : weather.uv_index > 3 ? 'yellow' : 'green'}">${weather.uv_index}</div>
+        </div>
+        <div class="info-card">
+          <div class="label">${t('wind')}</div>
+          <div class="value">${weather.wind_speed_10m} km/h</div>
+        </div>
+        <div class="info-card">
+          <div class="label">${t('rain')}</div>
+          <div class="value">${weather.precipitation_probability}%</div>
+        </div>
+      </div>
+      <p class="sim-note">${t('weather_note')}</p>
+    `);
+  } catch(err) {
+    console.error('Open-Meteo greška:', err);
+  }
+}
+
+function onStreetClick(e) {
+  const p = e.features[0].properties;
+  const typeLabels = currentLang === 'sr' ? {
+    'residential': 'Stambena', 'primary': 'Primarna', 'secondary': 'Sekundarna',
+    'tertiary': 'Tercijarna', 'trunk': 'Magistralna', 'motorway': 'Auto-put',
+    'service': 'Servisna', 'footway': 'Pešačka', 'cycleway': 'Biciklistička',
+    'unclassified': 'Neklasifikovana'
+  } : {
+    'residential': 'Residential', 'primary': 'Primary', 'secondary': 'Secondary',
+    'tertiary': 'Tertiary', 'trunk': 'Trunk', 'motorway': 'Motorway',
+    'service': 'Service', 'footway': 'Footpath', 'cycleway': 'Cycleway',
+    'unclassified': 'Unclassified'
+  };
+
+  showInfo(`
+    <div class="obj-type">${t('street')}</div>
+    <h2>${p.name || (currentLang === 'sr' ? 'Bez naziva' : 'No name')}</h2>
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="label">${t('street_type')}</div>
+        <div class="value">${typeLabels[p.highway] || p.highway || '—'}</div>
+      </div>
+      <div class="info-card">
+        <div class="label">${t('max_speed')}</div>
+        <div class="value">${p.maxspeed ? p.maxspeed + ' km/h' : '—'}</div>
+      </div>
+      <div class="info-card">
+        <div class="label">${t('oneway')}</div>
+        <div class="value ${p.oneway === 'yes' ? 'yellow' : ''}">${p.oneway === 'yes' ? t('yes') : t('no')}</div>
+      </div>
+    </div>
+  `);
+}
+
+// ── Open-Meteo ────────────────────────────────────────────────
+async function fetchWeather(lat, lon) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,uv_index,precipitation_probability`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return data.current;
+}
+
+// ── Info panel helper ─────────────────────────────────────────
+function showInfo(html) {
+  const panel = document.getElementById('info-panel');
+  panel.innerHTML = html;
+  panel.style.display = html ? 'block' : 'none';
+}
+
+// ── Context summary za AI ─────────────────────────────────────
+function buildContextSummary() {
+  if (!buildingsData || !parksData) return;
+
+  const features = buildingsData.features;
+  const total = features.length;
+
+  const sorted = [...features].sort((a, b) =>
+    b.properties.total_kwh_year - a.properties.total_kwh_year
+  );
+
+  const top3 = sorted.slice(0, 3).map(f =>
+    `${f.properties.address} (${Math.round(f.properties.total_kwh_year).toLocaleString()} kWh/god, ${f.properties.levels} spratova)`
+  ).join('; ');
+
+  const avgKwh = (features.reduce((s, f) => s + f.properties.kwh_per_m2, 0) / total).toFixed(1);
+
+  const zones = {};
+  features.forEach(f => {
+    const z = f.properties.age_zone;
+    zones[z] = (zones[z] || 0) + 1;
+  });
+
+  const parkNames = parksData.features
+    .map(f => f.properties.name || 'Nepoznat')
+    .filter(Boolean)
+    .join(', ');
+
+  contextSummary = `
+Vračar Digital Twin podaci:
+- Ukupno zgrada: ${total}
+- Prosečna simulirana potrošnja: ${avgKwh} kWh/m²/god
+- Top 3 potrošača: ${top3}
+- Distribucija po epohi izgradnje (GHSL AGE): pre 1975: ${zones['pre_1941']||0}, 1975-1980: ${zones['1960_1980']||0}, 1980-1990: ${zones['1980_2000']||0}, posle 1990: ${zones['posle_2000']||0}
+- Parkovi: ${parksData.features.length} (${parkNames})
+- Ulice: ${streetsData.features.length} segmenata
+- Energetski model: simuliran na osnovu EU building energy standarda i GHSL starosti zgrade
+- Meteorološki podaci: Open-Meteo API (stvarni)
+- Sve adrese i geometrije: OpenStreetMap
+  `.trim();
+}
+
+// ── AI Chat ───────────────────────────────────────────────────
+function askSuggestion(text) {
+  document.getElementById('chat-input').value = text;
+  sendMessage();
+}
+
+document.getElementById('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  appendMessage('user', text);
+
+  const loadingEl = appendMessage('loading', t('thinking'));
+  document.getElementById('send-btn').disabled = true;
+
+  try {
+    const response = await fetch('http://localhost:5000/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, lang: currentLang })
+    });
+
+    const data = await response.json();
+    const rawText = data.reply || data.error || (currentLang === 'sr' ? 'Nema odgovora.' : 'No response.');
+
+    // Izvuci fly koordinate ako postoje
+    const flyMatch = rawText.match(/<fly>({.*?})<\/fly>/s);
+    const cleanText = rawText.replace(/<fly>.*?<\/fly>/s, '').trim();
+
+    loadingEl.remove();
+
+    if (flyMatch) {
+      try {
+        const coords = JSON.parse(flyMatch[1]);
+        const msgEl = appendMessage('ai', cleanText);
+        const btn = document.createElement('button');
+        btn.className = 'fly-link';
+        btn.textContent = t('show_on_map');
+        btn.onclick = () => map.flyTo({ center: [coords.lng, coords.lat], zoom: coords.zoom || 17, pitch: 50, duration: 1500 });
+        msgEl.appendChild(btn);
+      } catch {
+        appendMessage('ai', cleanText);
+      }
+    } else {
+      appendMessage('ai', cleanText);
+    }
+
+  } catch (err) {
+    loadingEl.remove();
+    appendMessage('ai', t('error_api') + err.message);
+  }
+
+  document.getElementById('send-btn').disabled = false;
+}
+
+function appendMessage(type, text) {
+  const el = document.createElement('div');
+  el.className = `msg ${type}`;
+  el.textContent = text;
+  const container = document.getElementById('messages');
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+  return el;
+}
+
+// ── Resizer logika ────────────────────────────────────────────
+(function initResizer() {
+  const resizer   = document.getElementById('resizer');
+  const infoPanel = document.getElementById('info-panel');
+  const chatArea  = document.getElementById('chat-area');
+  const sidebar   = document.getElementById('sidebar');
+
+  let startY = 0;
+  let startInfoH = 0;
+  let isDragging = false;
+
+  resizer.addEventListener('mousedown', e => {
+    isDragging = true;
+    startY = e.clientY;
+    startInfoH = infoPanel.offsetHeight;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const delta = e.clientY - startY;
+    const sidebarH = sidebar.offsetHeight;
+    const headerH = document.getElementById('sidebar-header').offsetHeight;
+    const legendH = document.getElementById('legend').offsetHeight;
+    const resizerH = resizer.offsetHeight;
+    const minInfo = 60;
+    const minChat = 200;
+    const maxInfo = sidebarH - headerH - legendH - resizerH - minChat;
+
+    let newH = Math.max(minInfo, Math.min(maxInfo, startInfoH + delta));
+    infoPanel.style.height = newH + 'px';
+    infoPanel.style.display = 'block';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+
+  // Touch podrška za mobilne
+  resizer.addEventListener('touchstart', e => {
+    startY = e.touches[0].clientY;
+    startInfoH = infoPanel.offsetHeight;
+    isDragging = true;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    const delta = e.touches[0].clientY - startY;
+    const newH = Math.max(60, startInfoH + delta);
+    infoPanel.style.height = newH + 'px';
+    infoPanel.style.display = 'block';
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => { isDragging = false; });
+})();
+</script>
+</body>
+</html>

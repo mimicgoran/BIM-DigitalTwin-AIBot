@@ -1,0 +1,16 @@
+# API ključevi — NIKAD na GitHub
+.env
+
+# Veliki data fajlovi
+data/serbia-latest.osm.pbf
+data/GHLS/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
