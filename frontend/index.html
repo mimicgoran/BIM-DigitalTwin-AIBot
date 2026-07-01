@@ -67,7 +67,32 @@
       }
 
       #resizer { display: none; }
-      #info-panel { display: none !important; }
+      #info-panel {
+        display: none;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        max-height: 50vh;
+        overflow-y: auto;
+        background: var(--surface);
+        border-top: 2px solid var(--accent);
+        z-index: 100;
+        padding: 14px 16px;
+      }
+
+      #info-panel.visible {
+        display: block !important;
+      }
+
+      #info-close {
+        display: block;
+        text-align: right;
+        font-size: 20px;
+        color: var(--muted);
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
       #legend { display: none; }
 
       #chat-area {
@@ -894,8 +919,22 @@ async function fetchWeather(lat, lon) {
 // ── Info panel helper ─────────────────────────────────────────
 function showInfo(html) {
   const panel = document.getElementById('info-panel');
-  panel.innerHTML = html;
-  panel.style.display = html ? 'block' : 'none';
+  const isMobile = window.innerWidth <= 640;
+
+  if (!html) {
+    panel.innerHTML = '';
+    panel.style.display = 'none';
+    panel.classList.remove('visible');
+    return;
+  }
+
+  if (isMobile) {
+    panel.innerHTML = `<span id="info-close" onclick="showInfo(null)">✕</span>` + html;
+    panel.classList.add('visible');
+  } else {
+    panel.innerHTML = html;
+    panel.style.display = 'block';
+  }
 }
 
 // ── Context summary za AI ─────────────────────────────────────
