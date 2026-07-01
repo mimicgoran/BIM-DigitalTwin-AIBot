@@ -44,6 +44,63 @@
       z-index: 10;
     }
 
+    /* ── Mobile layout ────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      #app {
+        flex-direction: column;
+      }
+
+      #map {
+        height: 45vh;
+        min-height: 200px;
+        flex: none;
+      }
+
+      #sidebar {
+        width: 100%;
+        min-width: unset;
+        height: 55vh;
+        border-left: none;
+        border-top: 1px solid var(--border);
+      }
+
+      #resizer { display: none; }
+
+      #info-panel {
+        max-height: 35vh;
+      }
+
+      #legend {
+        padding: 8px 14px;
+      }
+
+      #legend h3 { font-size: 9px; }
+
+      .legend-item { font-size: 10px; }
+
+      #chat-input-row {
+        padding: 8px 12px;
+        position: sticky;
+        bottom: 0;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        z-index: 5;
+      }
+
+      #messages {
+        padding: 10px 14px;
+      }
+
+      .msg { font-size: 12px; }
+
+      #sidebar-header {
+        padding: 10px 14px;
+      }
+
+      #sidebar-header .header-text h1 { font-size: 13px; }
+      #sidebar-header .header-text p { display: none; }
+    }
+
     #sidebar-header {
       padding: 18px 20px 14px;
       border-bottom: 1px solid var(--border);
