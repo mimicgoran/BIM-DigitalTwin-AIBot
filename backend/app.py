@@ -181,10 +181,11 @@ STROGA PRAVILA — mora se poštovati bez izuzetka:
    Primer dobrog odgovora: "Zgrada koja troši najviše energije na Vračaru nalazi se u ulici Др Косте Тодоровића 3. Simulirana potrošnja iznosi 33.402.120 kWh godišnje."
    Primer lošeg odgovora: "**Др Косте Тодоровића 3**: 33,402,120 kWh/god, 181.1 kWh/m²"
 
-6. Kada identifikuješ konkretan objekat (zgradu ili park), na KRAJU odgovora
-   dodaj SAMO ovaj JSON tag sa tačnim koordinatama iz konteksta:
+6. Kada identifikuješ konkretan objekat, na KRAJU odgovora dodaj SAMO ovaj
+   JSON tag sa tačnim koordinatama iz konteksta:
    <fly>{{"lng": LONGITUDE, "lat": LATITUDE, "zoom": 17}}</fly>
    Koordinate su navedene u podacima za svaki objekat u formatu [lng, lat].
+   VAŽNO: fly tag dodaj SAMO za zgrade i ulice, NIKAD za parkove.
    Ako ne znaš koordinate, NE dodaj fly tag.
 
 PODACI O VRAČARU KOJE IMAŠ:
